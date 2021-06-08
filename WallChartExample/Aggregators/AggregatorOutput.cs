@@ -12,13 +12,13 @@ namespace WallChartExample.Aggregators
          * etc
         */
         public string GroupingValue { get; set; }
-        public IEnumerable<int> EntityIds { get; set; }
+        public IEnumerable<long> EntityIds { get; set; }
 
         public AggregatorOutput()
         {
         }
 
-        public AggregatorOutput(string groupingValue, IEnumerable<int> entityIds)
+        public AggregatorOutput(string groupingValue, IEnumerable<long> entityIds)
         {
             this.GroupingValue = groupingValue;
             this.EntityIds = entityIds;
@@ -30,9 +30,9 @@ namespace WallChartExample.Aggregators
          * Returns new output with the entity ids narrowed to the
          * to only those contained on the input list
          */
-        public IAggregatorOutput ApplyEntityIdIntersection(IEnumerable<int> entityIdsSuperSet)
+        public IAggregatorOutput ApplyEntityIdIntersection(IEnumerable<long> entityIdsSuperSet)
         {
-            return new AggregatorOutput(this.GroupingValue, this.EntityIds.Where(entityIdsSuperSet.Contains));
+            return new AggregatorOutput(this.GroupingValue, this.EntityIds.Intersect(entityIdsSuperSet));
         }
     }
 }

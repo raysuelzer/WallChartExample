@@ -9,8 +9,8 @@ namespace WallChartExample.Aggregators
          * etc
          */
         public string GroupingValue { get; set; }
-        public IEnumerable<int> EntityIds { get; set; }
+        public IEnumerable<long> EntityIds { get; set; }
 
-        public IAggregatorOutput ApplyEntityIdIntersection(IEnumerable<int> entityIdsSuperSet);
+        public IAggregatorOutput ApplyEntityIdIntersection(IEnumerable<long> entityIdsSuperSet);
     }
 }

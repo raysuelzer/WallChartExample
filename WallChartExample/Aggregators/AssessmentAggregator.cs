@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Npgsql;
+using System;
 using System.Collections.Generic;
 using System.Data.SqlTypes;
 using System.Linq;
@@ -11,20 +12,33 @@ namespace WallChartExample.Aggregators
         public string CampaignId { get; set; }
     }
 
+    public class AssessmentQuerySQLItem
+    {
+        public string LatestAssessmentLevel { get; set; }
+        public string CampaignId { get; set; }
+        public long[] EntityIds { get; set; }
+    }
+
     public class AssessmentAggregator: IAggregator
     {
+        private readonly SQLReader sqlReader;
         private readonly AssessmentQueryParamsInput _queryParams;
         private readonly List<string> levels;
 
-        public AssessmentAggregator(AssessmentQueryParamsInput queryParams, int numberOfLevels)
+        public AssessmentAggregator(
+            SQLReader sqlReader,
+            AssessmentQueryParamsInput queryParams, 
+            int numberOfLevels)
         {
+            this.sqlReader = sqlReader;
             // Params used on SQL Query
             _queryParams = queryParams;
 
             // Used to make a list of the possible assessment levels,
             // Used later to fill in 0 for where there was no level for a certain assessment
             // return from the SQL query
-            levels = NumOfLevelsToList(numberOfLevels);
+            levels = Enumerable.Range(0, numberOfLevels).ToList<int>().Select(i => i.ToString()).ToList();
+            
         }
         public IEnumerable<IAggregatorOutput> FetchResults()
         {
@@ -33,73 +47,59 @@ namespace WallChartExample.Aggregators
             // and has few to no filters. We will filter this further
             // in the Aggregator Composer
             var sql = $@"
-            SELECT ce.latest_assessment_level, 
-                   ce.campaign_id, 
+            SELECT  ce.campaign_id, 
+                    ce.latest_assessment_level,                   
                    array_agg(ce.entity_id) AS entity_ids
                 FROM campaigns_entities ce
                 WHERE campaign_id = {_queryParams.CampaignId}
                 GROUP BY ce.campaign_id,  ce.latest_assessment_level";
 
-			// MOCK SQL EXECUTION
-			// assume campaign_id passed was 513, IT RETURNS BACK:
-            /*
-            latest_assessment_level | campaign_id | entity_ids			
-            0   513 { 9,11,12,13,21,24,26,57,103,106,111,118,144}          
-            2   513 { 6,2,3,5,8,18,19,10,22,25,27,28,29,30,31,33,34}
-            1   513 { 4,37,59,39,40,32,107,109,110,108,145}            
-            */
 
-            // We would loop through the results and cast to an IAggregatorOutput
-            
+            var sqlResults = sqlReader.RunQuery<AssessmentQuerySQLItem>(sql, ToSQLModel);
+
+            var aggOutputs = sqlResults.ToList().Select(r =>
+            {
+               return new AggregatorOutput
+               {
+                   GroupingValue = r.LatestAssessmentLevel,
+                   EntityIds = r.EntityIds
+               };
+            });
             // I am hard coding sample results
             // GroupingValue here is latest_assessment_level
 
             // Here is some mock output
-            var mockSqlResult = new List<IAggregatorOutput>()
-            {
-                new AggregatorOutput
-                {
-                    GroupingValue = "0",
-                    EntityIds = Enumerable.Range(1, 29)
-                },
-                new AggregatorOutput
-                {
-                    GroupingValue = "2",
-                    EntityIds = Enumerable.Range(30, 29)
-                },
-                new AggregatorOutput
-                {
-                    GroupingValue = "1", EntityIds = Enumerable.Range(60, 210)
-                }
-            };
-
+          
             // Ensure all levels have a result, this is needed to fill out any assessments which had no entityIds
             var resultWithMissingLevels = this.levels.Select(level =>
             {
-                var sqlResult = mockSqlResult.FirstOrDefault(t => t.GroupingValue == level);
-                if (sqlResult != null)
+                var aggOutput = aggOutputs.FirstOrDefault(t => t.GroupingValue == level);
+                if (aggOutput != null)
                 {
-                    return sqlResult;
+                    return aggOutput;
                 }
 
                 // No result, create an empty output for the level
-                return new AggregatorOutput(level, new List<int>());
+                return new AggregatorOutput(level, new List<long>());
             });
 
             // Order it by assessment level (will be easier later)
             return resultWithMissingLevels.OrderBy(t => t.GroupingValue);
         }
 
-        // Will make a string array from 0 to the number given
-        private static List<string> NumOfLevelsToList(int numOfLevels)
+        public AssessmentQuerySQLItem ToSQLModel(NpgsqlDataReader reader)
         {
-            var levels = new List<string>();
-            for (int i = 0; i <= numOfLevels; i++)
-            { // print numbers from 1 to 5
-                levels.Add(i.ToString());
-            }
+            return new AssessmentQuerySQLItem
+            {
 
-            return levels;
+                CampaignId = reader.GetFieldValue<long>(0).ToString(),
+                LatestAssessmentLevel = reader.GetFieldValue<int>(1).ToString(),                
+                EntityIds = reader.GetFieldValue<long[]>(2)
+
+                //CampaignId = reader.GetFieldValue<long>(reader.GetOrdinal("campaign_id")).ToString(),
+                //LatestAssessmentLevel = reader.GetFieldValue<int>(reader.GetOrdinal("latest_assessment_level")).ToString(),
+                //EntityIds = reader.GetFieldValue<long[]>(reader.GetOrdinal("entity_ids"))
+            };
         }
     }
 }

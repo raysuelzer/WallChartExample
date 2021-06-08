@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using WallChartExample.Aggregators;
@@ -9,7 +10,7 @@ namespace WallChartExample
 {
     public class AggregatorComposer
     {
-        private readonly IEnumerable<int> _baseEntityQueryResults;
+        private readonly IEnumerable<long> _baseEntityQueryResults;
 
         /**
         *  NOTE: This class expects an input of the superset of entity ids
@@ -23,7 +24,7 @@ namespace WallChartExample
         *  It would likely help the most cases where the base entity query is small and the
         *  size of the campaign is huge. But it may make the SQL query take more time to run.
         */
-        public AggregatorComposer(IEnumerable<int> baseEntityQueryResults)
+        public AggregatorComposer(IEnumerable<long> baseEntityQueryResults)
         {
             _baseEntityQueryResults = baseEntityQueryResults;
         }
@@ -54,7 +55,7 @@ namespace WallChartExample
         private List<AggregationResultType> CombineResults(
             IList<IAggregatorOutput> assessmentAggResults,
             LinkedListNode<List<IAggregatorOutput>> currentNode,
-            IList<int> entityIdSuperset
+            IList<long> entityIdSuperset
             )
         {
             if (currentNode == null)
@@ -71,7 +72,6 @@ namespace WallChartExample
                 MakeNoneGrouping(currentNodeList, entityIdSuperset)
                 );
 
-
             // Will use this later for sub grouping
             var nextNode = currentNode.Next;
 
@@ -79,7 +79,9 @@ namespace WallChartExample
             var result = currentNodeList.Select(item =>
             {
                 // Only the entityIds in the superset and the item
-                var intersectedEntityIds = item.EntityIds.Intersect(entityIdSuperset).ToList();
+                var intersectedEntityIds = item.EntityIds.Intersect(entityIdSuperset).ToArray();
+
+
                 // AggregationResult is the ultimate return type of the API
                 // served by GraphQL
                 var aggResult = new AggregationResultType()
@@ -112,45 +114,45 @@ namespace WallChartExample
         // This will include any entityIds in the superset that were not in the subset
         private IAggregatorOutput MakeNoneGrouping(
             IList<IAggregatorOutput> aggregatorOutputs,
-            IEnumerable<int> entityIdSuperset)
+            IList<long> entityIdSuperset)
         {
             // This is a flatMap uniq function
             // It combines all the entityIds from the returned SQL Counts
-            var matchedEntityIds = aggregatorOutputs.SelectMany(ao => ao.EntityIds).ToList().Distinct();
+            var matchedEntityIds = aggregatorOutputs.SelectMany(ao => ao.EntityIds).Distinct().ToList();
 
             // Then we need to get the entityIds from our base input (maybe it's an entire campaign)
             // and put any of these Ids that didn't have a result in the aggreagtor into a "none" or "missing" 
             // group.  For example, if our aggregator was for "city" this would include entityIds in the input
             // that did not have a city. 
 
-            var entityIdsNotInSubset = entityIdSuperset.ToList().Where(id => !matchedEntityIds.Contains(id)).ToList();
+            var entityIdsNotInSubset = entityIdSuperset.Where(id => !matchedEntityIds.Contains(id)).ToList();
 
             return new AggregatorOutput()
             {
                 GroupingValue = "NONE",
                 EntityIds = entityIdsNotInSubset
             };
+
+            
         }
 
         private static IList<AggregationMatchedType> SplitIntoAssessmentLevels(
             IList<IAggregatorOutput> assessmentAggResults,
-            IEnumerable<int> entityIdsSubset)
-        {
+            IEnumerable<long> entityIdsSubset)
+        {           
+
             var result = assessmentAggResults.Select(agr =>
             {
-                Console.WriteLine(agr.GroupingValue, agr.EntityIds);
                 return new AggregationMatchedType
                 {
                     // the assessment level is the grouping value
                     AssessmentLevel = agr.GroupingValue,
                     // Filter those entityIds to those in the subset provided
-                    EntityIds = agr.EntityIds.Where(ei => entityIdsSubset.Contains(ei))
-                        .Select(i => i.ToString()) // cast to a string for GraphQL result
-                        .ToList()
+                    EntityIds = agr.EntityIds.Intersect(entityIdsSubset)
+                       
                 };
-            });
-
-            return result.ToList();
+            }).ToList();
+            return result;
         }
     }
 }

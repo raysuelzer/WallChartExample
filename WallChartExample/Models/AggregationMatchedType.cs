@@ -7,6 +7,6 @@ namespace WallChartExample.Models
     public class AggregationMatchedType
     {
         public string AssessmentLevel { get; set; }
-        public IEnumerable<string> EntityIds { get; set; }
+        public IEnumerable<long> EntityIds { get; set; }
     }
 }

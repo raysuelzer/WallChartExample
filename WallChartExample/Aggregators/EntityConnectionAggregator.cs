@@ -51,12 +51,12 @@ namespace WallChartExample.Aggregators
                 new AggregatorOutput
                 {
                     GroupingValue = "9",
-                    EntityIds = new List<int> {9, 11, 12, 22, 25, 27, 28, 29, 30, 31, 33, 3}
+                    EntityIds = new List<long> {9, 11, 12, 22, 25, 27, 28, 29, 30, 31, 33, 3}
                 },
                 new AggregatorOutput
                 {
                     GroupingValue = "8",
-                    EntityIds = new List<int> {6, 2, 3}
+                    EntityIds = new List<long> {6, 2, 3}
                 }
             };
         }
